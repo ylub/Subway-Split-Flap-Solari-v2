@@ -4,10 +4,18 @@
   "description": "A Simulated Split-Flap display",
   "main": "app.js",
   "license": "MIT",
+
+  "packageManager": "yarn@4.5.3",
+
+  "engines": {
+    "node": ">=22.0.0"
+  },
+
   "dependencies": {
     "express": "^4.17.1",
     "node-fetch": "^3.3.2"
   },
+
   "scripts": {
     "run-python": "python3 \"Solari Board V2.1.py\" &",
     "start-node": "node app.js",
