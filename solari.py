@@ -71,6 +71,7 @@ class FeedConfig:
     default_station: str
     route_name_field: str = "route_long_name"
     route_symbol_field: str = "route_short_name"
+    use_transfer_clusters: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,7 @@ class GtfsSchedule:
         self.gtfs_dir = config.path
         self.routes = self._load_routes()
         self.stops = self._load_stops()
+        self.transfer_parent_ids = self._load_transfer_parent_ids()
         self.trips = self._load_trips()
         self.calendar_services = self._load_calendar()
         self.service_exceptions = self._load_service_exceptions()
@@ -119,6 +121,20 @@ class GtfsSchedule:
             row["search_key"] = clean(row["stop_name"])
             stops[row["stop_id"]] = row
         return stops
+
+    def _load_transfer_parent_ids(self) -> dict[str, set[str]]:
+        if not self.config.use_transfer_clusters:
+            return {}
+
+        parent_ids: dict[str, set[str]] = {}
+        for row in read_csv(self.gtfs_dir / "transfers.txt"):
+            from_parent = self.parent_id_for_stop_id(row.get("from_stop_id", ""))
+            to_parent = self.parent_id_for_stop_id(row.get("to_stop_id", ""))
+            if not from_parent or not to_parent or from_parent == to_parent:
+                continue
+            parent_ids.setdefault(from_parent, set()).add(to_parent)
+            parent_ids.setdefault(to_parent, set()).add(from_parent)
+        return parent_ids
 
     def _load_trips(self) -> dict[str, dict[str, str]]:
         return {row["trip_id"]: row for row in read_csv(self.gtfs_dir / "trips.txt")}
@@ -262,24 +278,33 @@ class GtfsSchedule:
             return self.stops[parent_id]
         return stop
 
+    def parent_id_for_stop_id(self, stop_id: str) -> str | None:
+        stop = self.stops.get(stop_id)
+        if not stop:
+            return None
+        return stop.get("parent_station") or stop_id
+
     def station_cluster_parent_ids(self, parent: dict[str, str]) -> list[str]:
-        candidates = {
+        same_name_candidates = {
             candidate_id: candidate
             for candidate_id, candidate in self.stops.items()
             if not candidate.get("parent_station") and candidate.get("search_key") == parent.get("search_key")
         }
         parent_id = parent["stop_id"]
-        if parent_id not in candidates:
-            return [parent_id]
-
         parent_ids = [parent_id]
         seen = {parent_id}
         index = 0
         while index < len(parent_ids):
-            current = candidates[parent_ids[index]]
+            current_id = parent_ids[index]
+            current = self.stops[current_id]
             index += 1
 
-            for candidate_id, candidate in candidates.items():
+            for candidate_id in self.transfer_parent_ids.get(current_id, set()):
+                if candidate_id not in seen and candidate_id in self.stops:
+                    seen.add(candidate_id)
+                    parent_ids.append(candidate_id)
+
+            for candidate_id, candidate in same_name_candidates.items():
                 if candidate_id in seen:
                     continue
                 distance = distance_meters(current, candidate)
@@ -292,13 +317,14 @@ class GtfsSchedule:
 
 FEEDS: dict[str, FeedConfig] = {
     "lirr": FeedConfig("lirr", "Long Island Rail Road", GTFS_ROOT / "lirr", "Jamaica", route_symbol_field="route_long_name"),
-    "subway": FeedConfig("subway", "NYC Subway", GTFS_ROOT / "subway", "Times Sq-42 St", "route_short_name"),
+    "subway": FeedConfig("subway", "NYC Subway", GTFS_ROOT / "subway", "Times Sq-42 St", "route_short_name", use_transfer_clusters=True),
     "subway_supplemented": FeedConfig(
         "subway_supplemented",
         "NYC Subway Supplemented",
         GTFS_ROOT / "subway_supplemented",
         "Times Sq-42 St",
         "route_short_name",
+        use_transfer_clusters=True,
     ),
     "manhattan_bus": FeedConfig("manhattan_bus", "Manhattan Bus", GTFS_ROOT / "manhattan_bus", "E 34 ST/5 AV", "route_short_name"),
     "metro_north": FeedConfig("metro_north", "Metro-North Railroad", GTFS_ROOT / "metro_north", "Grand Central", "route_short_name"),
