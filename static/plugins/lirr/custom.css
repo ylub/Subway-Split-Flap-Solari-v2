@@ -157,6 +157,18 @@ body {
   font-size: 20px;
 }
 
+.line-swatch.subway-symbol.express-symbol {
+  width: 34px;
+  height: 34px;
+  margin: 3px;
+  border-radius: 4px;
+  transform: rotate(45deg);
+}
+
+.line-swatch.subway-symbol.express-symbol .line-symbol-label {
+  transform: rotate(-45deg);
+}
+
 .splitflap .full,
 .splitflap .number,
 .splitflap .character {
