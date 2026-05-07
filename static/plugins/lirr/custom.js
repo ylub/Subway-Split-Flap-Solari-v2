@@ -8,6 +8,8 @@ sf.plugins.lirr = {
   },
 
   formatData: function(response) {
+    const feedKey = response.feed && response.feed.key ? response.feed.key : 'lirr';
+
     if (response.feed && response.feed.label) {
       $('#feed-title').text(response.feed.label);
     }
@@ -20,6 +22,7 @@ sf.plugins.lirr = {
         linecolor: item.route_color,
         line_text_color: item.route_text_color,
         line_symbol: shorten(item.route_symbol || item.route_id || item.route_name, 7),
+        feed_key: feedKey,
         branch: shorten(item.route_name.replace(' Branch', ''), 16),
         destination: shorten(item.destination, 16),
         scheduled: item.departure_time.replace(' AM', 'A').replace(' PM', 'P'),
@@ -39,6 +42,7 @@ function paintLineBadges(rows, data) {
       background: item.linecolor || '#333333',
       color: item.line_text_color || '#ffffff'
     });
+    badge.toggleClass('subway-symbol', item.feed_key === 'subway' || item.feed_key === 'subway_supplemented');
     badge.text(item.line_symbol || '');
   });
 }

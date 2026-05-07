@@ -110,6 +110,12 @@ body {
   text-transform: uppercase;
 }
 
+.line-swatch.subway-symbol {
+  width: 40px;
+  border-radius: 50%;
+  font-size: 20px;
+}
+
 .splitflap .branch {
   width: 448px;
 }
