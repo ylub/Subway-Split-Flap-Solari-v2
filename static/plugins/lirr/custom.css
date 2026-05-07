@@ -158,15 +158,11 @@ body {
 }
 
 .line-swatch.subway-symbol.express-symbol {
-  width: 34px;
-  height: 34px;
-  margin: 3px;
-  border-radius: 4px;
-  transform: rotate(45deg);
-}
-
-.line-swatch.subway-symbol.express-symbol .line-symbol-label {
-  transform: rotate(-45deg);
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 .splitflap .full,

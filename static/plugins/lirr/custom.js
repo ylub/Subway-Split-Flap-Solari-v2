@@ -50,7 +50,7 @@ function paintLineBadges(rows, data) {
     });
     badge.toggleClass('subway-symbol', item.feed_key === 'subway' || item.feed_key === 'subway_supplemented');
     badge.toggleClass('express-symbol', Boolean(item.line_express));
-    badge.empty().append($('<span class="line-symbol-label"></span>').text(item.line_symbol_display || item.line_symbol || ''));
+    badge.text(item.line_symbol_display || item.line_symbol || '');
   });
 }
 
