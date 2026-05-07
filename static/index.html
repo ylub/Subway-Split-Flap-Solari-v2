@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LIRR Solari</title>
+    <title>GTFS Solari</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="plugins/lirr/custom.css">
   </head>
@@ -11,17 +11,18 @@
     <div id="board" class="chartContainer splitflap">
       <div class="topbar">
         <div>
-          <p class="eyebrow">Long Island Rail Road</p>
+          <p id="feed-title" class="eyebrow">Long Island Rail Road</p>
           <h1 id="station-title">Jamaica</h1>
         </div>
         <form id="station-form" class="station-form">
+          <select id="feed-select" aria-label="Transit feed"></select>
           <input id="station-input" list="stations" value="Jamaica" aria-label="Station">
           <datalist id="stations"></datalist>
           <button type="submit">Set</button>
         </form>
       </div>
 
-      <div class="header" style="width:24px;margin-left:0px;"></div>
+      <div class="header" style="width:68px;margin-left:0px;"></div>
       <div class="header" style="width:448px;">Line</div>
       <div class="header" style="width:448px;">Destination</div>
       <div class="header" style="width:160px;">Time</div>
@@ -92,22 +93,64 @@
         stagger: 160
       };
 
-      fetch('/api/stations')
+      const feedSelect = document.getElementById('feed-select');
+      const stationInput = document.getElementById('station-input');
+      const stationsList = document.getElementById('stations');
+      const feedTitle = document.getElementById('feed-title');
+      const params = new URLSearchParams(window.location.search);
+
+      function loadStations(feed, nextStation) {
+        return fetch('/api/stations?feed=' + encodeURIComponent(feed))
+          .then(response => response.json())
+          .then(data => {
+            stationsList.replaceChildren(...data.stations.map(station => {
+              const option = document.createElement('option');
+              option.value = station.stop_name;
+              option.label = station.stop_code;
+              return option;
+            }));
+            feedTitle.textContent = data.feed.label;
+            stationInput.value = nextStation || data.feed.default_station;
+          });
+      }
+
+      function setUrl(feed, station) {
+        const url = new URL(window.location);
+        url.searchParams.set('feed', feed);
+        url.searchParams.set('station', station);
+        history.replaceState(null, '', url);
+      }
+
+      fetch('/api/feeds')
         .then(response => response.json())
         .then(data => {
-          const list = document.getElementById('stations');
-          list.replaceChildren(...data.stations.map(station => {
+          feedSelect.replaceChildren(...data.feeds.map(feed => {
             const option = document.createElement('option');
-            option.value = station.stop_name;
-            option.label = station.stop_code;
+            option.value = feed.key;
+            option.textContent = feed.label;
             return option;
           }));
+
+          const initialFeed = params.get('feed') || 'lirr';
+          const initialStation = params.get('station');
+          feedSelect.value = initialFeed;
+          return loadStations(initialFeed, initialStation);
+        })
+        .then(() => {
+          sf.board.init(sf.options);
+          sf.items.init(sf.options);
+          sf.items.load(sf.options);
         });
 
+      feedSelect.addEventListener('change', function() {
+        loadStations(feedSelect.value).then(() => {
+          setUrl(feedSelect.value, stationInput.value);
+          items.url = sf.plugins.lirr.url(sf.options);
+          items.update(sf.options);
+        });
+      });
+
       $(document).ready(function() {
-        sf.board.init(sf.options);
-        sf.items.init(sf.options);
-        sf.items.load(sf.options);
       });
     </script>
   </body>

@@ -331,6 +331,7 @@ sf.Items = Backbone.Collection.extend({
         }, stagger);
       }
       loop();
+      $(document).trigger('sf:rows-loaded', [rows, input]);
     },
 
     /**

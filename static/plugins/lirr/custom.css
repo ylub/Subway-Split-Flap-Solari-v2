@@ -39,6 +39,7 @@ body {
   gap: 8px;
 }
 
+.station-form select,
 .station-form input,
 .station-form button {
   height: 40px;
@@ -46,11 +47,19 @@ body {
   font: inherit;
 }
 
+.station-form select,
 .station-form input {
-  width: 260px;
   padding: 0 10px;
   background: #171717;
   color: #ffffff;
+}
+
+.station-form select {
+  width: 210px;
+}
+
+.station-form input {
+  width: 260px;
 }
 
 .station-form button {
@@ -78,15 +87,27 @@ body {
 }
 
 .splitflap .linecolor {
-  width: 14px;
+  width: 58px;
   height: 40px;
   margin-right: 10px;
 }
 
 .line-swatch {
-  width: 14px;
+  width: 58px;
   height: 40px;
   background: #333333;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .splitflap .branch {
