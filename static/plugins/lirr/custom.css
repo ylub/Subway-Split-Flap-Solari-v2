@@ -5,9 +5,11 @@ body {
 }
 
 .splitflap {
-  width: min(1520px, calc(100vw - 32px));
+  width: min(1680px, calc(100vw - 32px));
   margin: 18px auto;
   padding: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid #333333;
   box-shadow: inset 0 0 0 6px #151515, 0 28px 90px rgba(0, 0, 0, 0.55);
 }
@@ -71,6 +73,9 @@ body {
 }
 
 .splitflap .header {
+  float: none;
+  display: inline-block;
+  vertical-align: top;
   height: 28px;
   margin-bottom: 12px;
   color: #c8c0ab;
@@ -78,18 +83,54 @@ body {
   text-transform: uppercase;
 }
 
+.splitflap .badge-head {
+  width: 64px;
+}
+
+.splitflap .branch-head,
+.splitflap .branch {
+  width: 416px;
+}
+
+.splitflap .destination-head,
+.splitflap .destination {
+  width: 416px;
+}
+
+.splitflap .scheduled-head,
+.splitflap .scheduled {
+  width: 156px;
+}
+
+.splitflap .minutes-head,
+.splitflap .minutes {
+  width: 78px;
+}
+
+.splitflap .remarks-head,
+.splitflap .remarks {
+  width: 234px;
+}
+
 .splitflap .row {
   height: 56px;
+  min-width: 1440px;
+  white-space: nowrap;
 }
 
 .splitflap .group {
-  margin-right: 10px;
+  margin-right: 8px;
+}
+
+.splitflap .status {
+  width: 56px;
+  margin-right: 0;
 }
 
 .splitflap .linecolor {
   width: 58px;
   height: 40px;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 
 .line-swatch {
@@ -116,30 +157,10 @@ body {
   font-size: 20px;
 }
 
-.splitflap .branch {
-  width: 448px;
-}
-
-.splitflap .destination {
-  width: 448px;
-}
-
-.splitflap .scheduled {
-  width: 160px;
-}
-
-.splitflap .minutes {
-  width: 80px;
-}
-
-.splitflap .remarks {
-  width: 270px;
-}
-
 .splitflap .full,
 .splitflap .number,
 .splitflap .character {
-  margin-right: 3px;
+  margin-right: 1px;
 }
 
 @media (max-width: 900px) {
