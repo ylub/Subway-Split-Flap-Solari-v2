@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import mimetypes
 import re
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 GTFS_ROOT = BASE_DIR / "gtfs"
 FEED_TZ = ZoneInfo("America/New_York")
+STATION_CLUSTER_METERS = 350
 
 
 def clean(value: str) -> str:
@@ -37,6 +39,21 @@ def format_gtfs_time(seconds: int) -> str:
     suffix = "AM" if hours < 12 else "PM"
     display_hour = hours % 12 or 12
     return f"{display_hour}:{minutes:02d} {suffix}"
+
+
+def distance_meters(first: dict[str, str], second: dict[str, str]) -> float | None:
+    try:
+        first_lat = math.radians(float(first["stop_lat"]))
+        first_lon = math.radians(float(first["stop_lon"]))
+        second_lat = math.radians(float(second["stop_lat"]))
+        second_lon = math.radians(float(second["stop_lon"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    lat_delta = second_lat - first_lat
+    lon_delta = second_lon - first_lon
+    a = math.sin(lat_delta / 2) ** 2 + math.cos(first_lat) * math.cos(second_lat) * math.sin(lon_delta / 2) ** 2
+    return 6371000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -227,15 +244,34 @@ class GtfsSchedule:
         return stop, departures
 
     def stop_ids_for(self, stop: dict[str, str]) -> list[str]:
-        stop_id = stop["stop_id"]
-        related = [
-            candidate_id
-            for candidate_id, row in self.stops.items()
-            if row.get("parent_station") == stop_id and candidate_id in self.stop_times_by_stop
-        ]
-        if stop_id in self.stop_times_by_stop:
-            return [stop_id, *related]
-        return related or [stop_id]
+        parent = self.parent_stop_for(stop)
+        stop_ids: list[str] = []
+        for parent_id in self.station_cluster_parent_ids(parent):
+            if parent_id in self.stop_times_by_stop:
+                stop_ids.append(parent_id)
+            stop_ids.extend(
+                candidate_id
+                for candidate_id, row in self.stops.items()
+                if row.get("parent_station") == parent_id and candidate_id in self.stop_times_by_stop
+            )
+        return stop_ids or [stop["stop_id"]]
+
+    def parent_stop_for(self, stop: dict[str, str]) -> dict[str, str]:
+        parent_id = stop.get("parent_station")
+        if parent_id and parent_id in self.stops:
+            return self.stops[parent_id]
+        return stop
+
+    def station_cluster_parent_ids(self, parent: dict[str, str]) -> list[str]:
+        parent_ids = []
+        for candidate_id, candidate in self.stops.items():
+            if candidate.get("parent_station") or candidate.get("search_key") != parent.get("search_key"):
+                continue
+
+            distance = distance_meters(parent, candidate)
+            if candidate_id == parent["stop_id"] or (distance is not None and distance <= STATION_CLUSTER_METERS):
+                parent_ids.append(candidate_id)
+        return parent_ids
 
 
 FEEDS: dict[str, FeedConfig] = {
