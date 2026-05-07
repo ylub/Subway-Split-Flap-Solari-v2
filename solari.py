@@ -263,14 +263,30 @@ class GtfsSchedule:
         return stop
 
     def station_cluster_parent_ids(self, parent: dict[str, str]) -> list[str]:
-        parent_ids = []
-        for candidate_id, candidate in self.stops.items():
-            if candidate.get("parent_station") or candidate.get("search_key") != parent.get("search_key"):
-                continue
+        candidates = {
+            candidate_id: candidate
+            for candidate_id, candidate in self.stops.items()
+            if not candidate.get("parent_station") and candidate.get("search_key") == parent.get("search_key")
+        }
+        parent_id = parent["stop_id"]
+        if parent_id not in candidates:
+            return [parent_id]
 
-            distance = distance_meters(parent, candidate)
-            if candidate_id == parent["stop_id"] or (distance is not None and distance <= STATION_CLUSTER_METERS):
-                parent_ids.append(candidate_id)
+        parent_ids = [parent_id]
+        seen = {parent_id}
+        index = 0
+        while index < len(parent_ids):
+            current = candidates[parent_ids[index]]
+            index += 1
+
+            for candidate_id, candidate in candidates.items():
+                if candidate_id in seen:
+                    continue
+                distance = distance_meters(current, candidate)
+                if distance is not None and distance <= STATION_CLUSTER_METERS:
+                    seen.add(candidate_id)
+                    parent_ids.append(candidate_id)
+
         return parent_ids
 
 
