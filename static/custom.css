@@ -1,0 +1,133 @@
+body {
+  margin: 0;
+  background: #0b0b0b;
+  color: #ffffff;
+}
+
+.splitflap {
+  width: min(1520px, calc(100vw - 32px));
+  margin: 18px auto;
+  padding: 18px;
+  border: 1px solid #333333;
+  box-shadow: inset 0 0 0 6px #151515, 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.topbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.splitflap h1 {
+  margin: 0;
+  font-size: 3.2em;
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #e8b94d;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.station-form {
+  display: flex;
+  gap: 8px;
+}
+
+.station-form input,
+.station-form button {
+  height: 40px;
+  border: 1px solid #555555;
+  font: inherit;
+}
+
+.station-form input {
+  width: 260px;
+  padding: 0 10px;
+  background: #171717;
+  color: #ffffff;
+}
+
+.station-form button {
+  padding: 0 18px;
+  background: #e8b94d;
+  border-color: #e8b94d;
+  color: #111111;
+  font-weight: bold;
+}
+
+.splitflap .header {
+  height: 28px;
+  margin-bottom: 12px;
+  color: #c8c0ab;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.splitflap .row {
+  height: 56px;
+}
+
+.splitflap .group {
+  margin-right: 10px;
+}
+
+.splitflap .linecolor {
+  width: 14px;
+  height: 40px;
+  margin-right: 10px;
+}
+
+.line-swatch {
+  width: 14px;
+  height: 40px;
+  background: #333333;
+}
+
+.splitflap .branch {
+  width: 448px;
+}
+
+.splitflap .destination {
+  width: 448px;
+}
+
+.splitflap .scheduled {
+  width: 160px;
+}
+
+.splitflap .minutes {
+  width: 80px;
+}
+
+.splitflap .remarks {
+  width: 270px;
+}
+
+.splitflap .full,
+.splitflap .number,
+.splitflap .character {
+  margin-right: 3px;
+}
+
+@media (max-width: 900px) {
+  .splitflap {
+    width: calc(100vw - 16px);
+    margin: 8px auto;
+    padding: 10px;
+    overflow-x: auto;
+  }
+
+  .topbar {
+    display: block;
+  }
+
+  .station-form {
+    margin-top: 16px;
+  }
+}

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LIRR Solari</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="plugins/lirr/custom.css">
+  </head>
+  <body>
+    <div id="board" class="chartContainer splitflap">
+      <div class="topbar">
+        <div>
+          <p class="eyebrow">Long Island Rail Road</p>
+          <h1 id="station-title">Jamaica</h1>
+        </div>
+        <form id="station-form" class="station-form">
+          <input id="station-input" list="stations" value="Jamaica" aria-label="Station">
+          <datalist id="stations"></datalist>
+          <button type="submit">Set</button>
+        </form>
+      </div>
+
+      <div class="header" style="width:24px;margin-left:0px;"></div>
+      <div class="header" style="width:448px;">Line</div>
+      <div class="header" style="width:448px;">Destination</div>
+      <div class="header" style="width:160px;">Time</div>
+      <div class="header" style="width:80px;">Min</div>
+      <div class="header" style="width:270px;">Remarks</div>
+
+      <script type="text/template" id="row_template">
+        <div class="row">
+          <div class="group linecolor"><div class="line-swatch"></div></div>
+
+          <div class="group branch">
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div>
+          </div>
+
+          <div class="group destination">
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+          </div>
+
+          <div class="group scheduled">
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+          </div>
+
+          <div class="group minutes">
+            <div class="number"><span></span></div><div class="number"><span></span></div><div class="number"><span></span></div>
+          </div>
+
+          <div class="group remarks">
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+            <div class="full"><span></span></div><div class="full"><span></span></div><div class="full"><span></span></div>
+          </div>
+
+          <div class="group status">
+            <div class="sA"></div>
+            <div class="sB"></div>
+          </div>
+        </div>
+      </script>
+    </div>
+
+    <script src="vendor/jquery.js"></script>
+    <script src="vendor/underscore-min.js"></script>
+    <script src="vendor/backbone-min.js"></script>
+    <script src="js/split-flap.js"></script>
+    <script src="plugins/lirr/custom.js"></script>
+    <script>
+      sf.options = {
+        plugin: 'lirr',
+        container: $('#board'),
+        template: $('#row_template'),
+        numRows: 12,
+        sort: 'minutes',
+        order: 'asc',
+        maxResults: 12,
+        pageInterval: 30000,
+        stagger: 160
+      };
+
+      fetch('/api/stations')
+        .then(response => response.json())
+        .then(data => {
+          const list = document.getElementById('stations');
+          list.replaceChildren(...data.stations.map(station => {
+            const option = document.createElement('option');
+            option.value = station.stop_name;
+            option.label = station.stop_code;
+            return option;
+          }));
+        });
+
+      $(document).ready(function() {
+        sf.board.init(sf.options);
+        sf.items.init(sf.options);
+        sf.items.load(sf.options);
+      });
+    </script>
+  </body>
+</html>

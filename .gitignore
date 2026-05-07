@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local GTFS schedule data and source archives.
+# Keep these on disk, but do not publish them with the app repo.
+gtfs/
+!gtfs/
+gtfs/*
+!gtfs/README.md
+zip/

@@ -1,78 +1,46 @@
-# Virtual Split-Flap Display — NYC Subway
+# LIRR Solari
 
-![Screenshot](thumbnail.png)
+A local Long Island Rail Road split-flap departure board based on David Tropiansky's MIT-licensed Subway Split-Flap Solari v2 frontend.
 
-This project is a **web-based simulation of a split-flap (Solari) display** showing **real-time NYC Subway arrivals**. It uses animated CSS sprites to emulate physical split‑flap boards and pulls live data from the **Transiter API**.
+Python reads the local LIRR GTFS feed in `gtfs/lirr/`, exposes JSON endpoints, and serves the browser board. The frontend uses the v2 GitHub project's `split-flap.js`, base CSS, flap sprite sheet, and status light images, with a local `plugins/lirr/` adapter for LIRR branch names and GTFS line colors. See `THIRD_PARTY_NOTICES.md` for attribution and data notes.
 
-The project can run **locally** or as a **hosted multi-page website** (e.g., Replit), supports **all 499 NYC subway stations**, and is designed for both **horizontal and vertical displays**.
+Additional GTFS feeds are kept under `gtfs/`:
 
----
+- `gtfs/subway/`
+- `gtfs/subway_supplemented/`
+- `gtfs/manhattan_bus/`
+- `gtfs/metro_north/`
 
-## Key Features
-- Real-time NYC Subway arrivals
-- Authentic split-flap animation using CSS sprites
-- Station selector with search (499 stations)
-- Per-station arrival board with routes, destination, ETA, and service status
-- Configurable refresh intervals, row counts, and sorting
-- Optimized for kiosks, wall displays, and fullscreen setups
+## Run
 
----
+```bash
+cd /Users/yitzchak/Documents/Python/solari
+python3 solari.py
+```
 
-## Architecture Overview
+Then open:
 
-### Frontend
-- **Home Page** (`public/index.html`)
-- **Display Page** (`public/display.html`)
-- Libraries: jQuery, Underscore.js, Backbone.js
+```text
+http://127.0.0.1:8080
+```
 
-### Backend
-- **Node.js / Express (`app.js`)**
-  - `/api/stations`
-  - `/api/stations/:stationId/arrivals`
-  - Direct Transiter API integration
-  - Built-in caching
+Use a station name such as `Jamaica`, `Far Rockaway`, `Penn Station`, `Grand Central`, `Cedarhurst`, or `Woodmere`.
 
-**Note:** Python subprocess removed as of December 2025.
+## API
 
----
+```text
+/api/stations
+/api/departures?station=Jamaica&limit=12
+```
 
-## Customization
-- Rows: `app.js` (~30), `display.html` (~109–112)
-- Refresh: 20s backend + frontend
-- Sorting: time, route, destination
+Each departure includes:
 
----
+- `route_name`
+- `route_color`
+- `route_text_color`
+- `destination`
+- `departure_time`
+- `minutes`
+- `status`
 
-## Credits
-- Split-flap template inspired by baspete
-- Transit data powered by Transiter
-
-# Virtual Split-Flap Display — Deployment
-
-## Current State
-- Multi-page website
-- Always-on VM deployment
-- Node.js only (no Python subprocess)
-
----
-
-## Replit Configuration
-- Command: `bash start.sh`
-- Port: `5000`
-- Deployment: VM
-
----
-
-## Backend Summary
-- Express server (`app.js`)
-- Endpoints:
-  - `/api/stations`
-  - `/api/stations/:stationId/arrivals`
-- Caching, route colors, service alerts
-
----
-
-## Architecture Notes (Dec 2025)
-- Removed Python fetch loop
-- Simplified deployment
-- Faster responses
+The current version is based on static GTFS schedules, so status is shown as `Scheduled`.
