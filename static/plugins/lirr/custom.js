@@ -28,6 +28,7 @@ sf.plugins.lirr = {
         line_symbol: shorten(routeSymbol, 7),
         line_symbol_display: shorten(express ? routeSymbol.replace(/X$/i, '') : routeSymbol, 7),
         line_express: express,
+        line_icon: item.route_icon || '',
         feed_key: feedKey,
         branch: shorten(item.route_name.replace(' Branch', ''), 16),
         destination: shorten(item.destination, 16),
@@ -48,9 +49,18 @@ function paintLineBadges(rows, data) {
       background: item.linecolor || '#333333',
       color: item.line_text_color || '#ffffff'
     });
+    badge.empty();
     badge.toggleClass('subway-symbol', item.feed_key === 'subway' || item.feed_key === 'subway_supplemented');
     badge.toggleClass('express-symbol', Boolean(item.line_express));
-    badge.text(item.line_symbol_display || item.line_symbol || '');
+    badge.toggleClass('rail-icon', Boolean(item.line_icon));
+    if (item.line_icon) {
+      $('<img>', {
+        src: item.line_icon,
+        alt: item.line_symbol || item.branch || 'Rail line'
+      }).appendTo(badge);
+    } else {
+      badge.text(item.line_symbol_display || item.line_symbol || '');
+    }
   });
 }
 

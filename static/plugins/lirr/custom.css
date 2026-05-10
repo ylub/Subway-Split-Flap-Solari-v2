@@ -165,6 +165,19 @@ body {
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
+.line-swatch.rail-icon {
+  background: transparent !important;
+  border-radius: 0;
+  padding: 0;
+}
+
+.line-swatch.rail-icon img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 .splitflap .full,
 .splitflap .number,
 .splitflap .character {

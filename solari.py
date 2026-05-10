@@ -85,6 +85,7 @@ class Departure:
     trip_id: str
     trip_short_name: str
     direction_id: str
+    route_icon: str
     departure_seconds: int
     minutes: int
     peak_offpeak: str
@@ -249,6 +250,7 @@ class GtfsSchedule:
                         trip_id=trip["trip_id"],
                         trip_short_name=trip.get("trip_short_name", ""),
                         direction_id=trip.get("direction_id", ""),
+                        route_icon=self.route_icon_for(route.get("symbol", trip["route_id"])),
                         departure_seconds=departure_seconds,
                         minutes=minutes,
                         peak_offpeak=trip.get("peak_offpeak", ""),
@@ -258,6 +260,12 @@ class GtfsSchedule:
         departures.sort(key=lambda item: item.departure_seconds)
         departures = departures[:limit]
         return stop, departures
+
+    def route_icon_for(self, route_symbol: str) -> str:
+        if self.config.key != "njt_rail":
+            return ""
+        icon_file = NJT_RAIL_ICON_FILES.get(route_symbol.upper(), "")
+        return f"/gtfs/njt/NJT_rail_icons/{icon_file}" if icon_file else ""
 
     def stop_ids_for(self, stop: dict[str, str]) -> list[str]:
         parent = self.parent_stop_for(stop)
@@ -328,9 +336,31 @@ FEEDS: dict[str, FeedConfig] = {
     ),
     "manhattan_bus": FeedConfig("manhattan_bus", "Manhattan Bus", GTFS_ROOT / "manhattan_bus", "E 34 ST/5 AV", "route_short_name"),
     "metro_north": FeedConfig("metro_north", "Metro-North Railroad", GTFS_ROOT / "metro_north", "Grand Central", "route_short_name"),
+    "njt_rail": FeedConfig("njt_rail", "NJ TRANSIT Rail", GTFS_ROOT / "njt" / "rail_data", "NEW YORK PENN STATION"),
+    "njt_bus": FeedConfig("njt_bus", "NJ TRANSIT Bus", GTFS_ROOT / "njt" / "bus_data", "PORT AUTHORITY BUS TERMINAL"),
+    "academy_bus": FeedConfig("academy_bus", "Academy Bus", GTFS_ROOT / "njt" / "Academy_bus_data", "C Columbus Drive at Grove St"),
 }
 
 SCHEDULES: dict[str, GtfsSchedule] = {}
+
+NJT_RAIL_ICON_FILES = {
+    "ATLC": "AC_icon.png",
+    "BNTN": "MC_icon.png",
+    "BNTNM": "MC_icon.png",
+    "HBLR": "HBLR_icon.png",
+    "MNBN": "MBPJ_MNBNP.png",
+    "MNBNP": "MBPJ_MNBNP.png",
+    "MNE": "MNE_MNEG.png",
+    "MNEG": "MNE_MNEG.png",
+    "NEC": "NE_icon.png",
+    "NJCL": "NC_icon.png",
+    "NJCLL": "NC_icon.png",
+    "NLR": "NLR_icon.png",
+    "PASC": "PV_icon.png",
+    "PRIN": "PR_icon.png",
+    "RARV": "RV_icon.png",
+    "RVLN": "RL_icon.png",
+}
 
 
 def feed_options() -> list[dict[str, str]]:
@@ -367,6 +397,9 @@ class SolariHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/stations":
             self.send_stations(parsed.query)
+            return
+        if parsed.path.startswith("/gtfs/njt/NJT_rail_icons/"):
+            self.send_njt_rail_icon(parsed.path)
             return
 
         relative = "index.html" if parsed.path in {"/", ""} else unquote(parsed.path.lstrip("/"))
@@ -432,6 +465,7 @@ class SolariHandler(BaseHTTPRequestHandler):
                         "trip_short_name": item.trip_short_name,
                         "direction_id": item.direction_id,
                         "peak_offpeak": item.peak_offpeak,
+                        "route_icon": item.route_icon,
                     }
                     for item in departures
                 ],
@@ -457,6 +491,21 @@ class SolariHandler(BaseHTTPRequestHandler):
                 "stations": schedule.station_options(),
             }
         )
+
+    def send_njt_rail_icon(self, request_path: str) -> None:
+        icon_name = Path(unquote(request_path)).name
+        path = (GTFS_ROOT / "njt" / "NJT_rail_icons" / icon_name).resolve()
+        icon_root = (GTFS_ROOT / "njt" / "NJT_rail_icons").resolve()
+        if icon_root not in path.parents or not path.exists() or not path.is_file():
+            self.send_error(404)
+            return
+
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, indent=2).encode("utf-8")
