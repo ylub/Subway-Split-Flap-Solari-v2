@@ -1,6 +1,7 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+.env
 
 # Local GTFS schedule data and source archives.
 # Keep these on disk, but do not publish them with the app repo.
@@ -11,4 +12,12 @@ gtfs/*
 
 # NJ TRANSIT GTFS data and icon resources require NJT approval to publish.
 gtfs/njt/
+data/raw/
+data/archive/
+!data/
+!data/raw/
+!data/archive/
+!data/raw/.gitkeep
+!data/archive/.gitkeep
+config/njt_token.json
 zip/

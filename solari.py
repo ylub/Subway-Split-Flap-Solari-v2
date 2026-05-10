@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import math
 import mimetypes
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,8 +22,11 @@ from zoneinfo import ZoneInfo
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 GTFS_ROOT = BASE_DIR / "gtfs"
+DATA_ROOT = BASE_DIR / "data"
 FEED_TZ = ZoneInfo("America/New_York")
 STATION_CLUSTER_METERS = 350
+NJT_RAIL_GTFS_ZIP = DATA_ROOT / "raw" / "rail_gtfs.zip"
+NJT_RAIL_TRIP_UPDATES = DATA_ROOT / "raw" / "trip_updates.pb"
 
 
 def clean(value: str) -> str:
@@ -72,6 +77,7 @@ class FeedConfig:
     route_name_field: str = "route_long_name"
     route_symbol_field: str = "route_short_name"
     use_transfer_clusters: bool = False
+    zip_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,7 @@ class Departure:
     trip_short_name: str
     direction_id: str
     route_icon: str
+    status: str
     departure_seconds: int
     minutes: int
     peak_offpeak: str
@@ -103,9 +110,20 @@ class GtfsSchedule:
         self.service_exceptions = self._load_service_exceptions()
         self.stop_times_by_stop = self._load_stop_times()
 
+    def _read_gtfs_csv(self, filename: str) -> list[dict[str, str]]:
+        if self.config.zip_path and self.config.zip_path.exists():
+            try:
+                with zipfile.ZipFile(self.config.zip_path) as archive:
+                    with archive.open(filename) as handle:
+                        text = io.TextIOWrapper(handle, encoding="utf-8-sig")
+                        return list(csv.DictReader(text))
+            except KeyError:
+                return []
+        return read_csv(self.gtfs_dir / filename)
+
     def _load_routes(self) -> dict[str, dict[str, str]]:
         routes = {}
-        for row in read_csv(self.gtfs_dir / "routes.txt"):
+        for row in self._read_gtfs_csv("routes.txt"):
             name = row.get(self.config.route_name_field, "") or row.get("route_short_name", "") or row.get("route_long_name", "")
             symbol = row.get(self.config.route_symbol_field, "") or row.get("route_short_name", "") or name or row["route_id"]
             routes[row["route_id"]] = {
@@ -118,7 +136,7 @@ class GtfsSchedule:
 
     def _load_stops(self) -> dict[str, dict[str, str]]:
         stops = {}
-        for row in read_csv(self.gtfs_dir / "stops.txt"):
+        for row in self._read_gtfs_csv("stops.txt"):
             row["search_key"] = clean(row["stop_name"])
             stops[row["stop_id"]] = row
         return stops
@@ -128,7 +146,7 @@ class GtfsSchedule:
             return {}
 
         parent_ids: dict[str, set[str]] = {}
-        for row in read_csv(self.gtfs_dir / "transfers.txt"):
+        for row in self._read_gtfs_csv("transfers.txt"):
             from_parent = self.parent_id_for_stop_id(row.get("from_stop_id", ""))
             to_parent = self.parent_id_for_stop_id(row.get("to_stop_id", ""))
             if not from_parent or not to_parent or from_parent == to_parent:
@@ -138,14 +156,14 @@ class GtfsSchedule:
         return parent_ids
 
     def _load_trips(self) -> dict[str, dict[str, str]]:
-        return {row["trip_id"]: row for row in read_csv(self.gtfs_dir / "trips.txt")}
+        return {row["trip_id"]: row for row in self._read_gtfs_csv("trips.txt")}
 
     def _load_calendar(self) -> list[dict[str, str]]:
-        return read_csv(self.gtfs_dir / "calendar.txt")
+        return self._read_gtfs_csv("calendar.txt")
 
     def _load_service_exceptions(self) -> dict[str, dict[str, set[str]]]:
         exceptions: dict[str, dict[str, set[str]]] = {}
-        for row in read_csv(self.gtfs_dir / "calendar_dates.txt"):
+        for row in self._read_gtfs_csv("calendar_dates.txt"):
             action = "added" if row.get("exception_type") == "1" else "removed"
             exceptions.setdefault(row["date"], {"added": set(), "removed": set()})[action].add(row["service_id"])
         return exceptions
@@ -168,7 +186,7 @@ class GtfsSchedule:
 
     def _load_stop_times(self) -> dict[str, list[dict[str, str | int]]]:
         by_stop: dict[str, list[dict[str, str | int]]] = {}
-        for row in read_csv(self.gtfs_dir / "stop_times.txt"):
+        for row in self._read_gtfs_csv("stop_times.txt"):
             trip = self.trips.get(row["trip_id"])
             if not trip:
                 continue
@@ -251,6 +269,7 @@ class GtfsSchedule:
                         trip_short_name=trip.get("trip_short_name", ""),
                         direction_id=trip.get("direction_id", ""),
                         route_icon=self.route_icon_for(route.get("symbol", trip["route_id"])),
+                        status="Scheduled",
                         departure_seconds=departure_seconds,
                         minutes=minutes,
                         peak_offpeak=trip.get("peak_offpeak", ""),
@@ -323,6 +342,80 @@ class GtfsSchedule:
         return parent_ids
 
 
+class NjtRailSchedule(GtfsSchedule):
+    def __init__(self, config: FeedConfig) -> None:
+        super().__init__(config)
+        self.trip_updates = self._load_trip_updates()
+
+    def departures(self, station: str, limit: int = 12, now: datetime | None = None) -> tuple[dict[str, str], list[Departure]]:
+        stop, departures = super().departures(station, limit=limit, now=now)
+        if not self.trip_updates:
+            return stop, departures
+
+        updated = [self._apply_trip_update(departure) for departure in departures]
+        updated.sort(key=lambda item: item.departure_seconds)
+        return stop, updated[:limit]
+
+    def _load_trip_updates(self) -> dict[str, dict[str, int | str]]:
+        if not NJT_RAIL_TRIP_UPDATES.exists():
+            return {}
+        try:
+            from app.gtfsrt import parse_trip_updates
+        except RuntimeError as error:
+            print(f"Skipping NJT trip updates: {error}")
+            return {}
+
+        try:
+            updates = parse_trip_updates(NJT_RAIL_TRIP_UPDATES)
+        except Exception as error:
+            print(f"Skipping NJT trip updates: {error}")
+            return {}
+
+        by_trip: dict[str, dict[str, int | str]] = {}
+        for update in updates:
+            status = "Scheduled"
+            delay_seconds = 0
+            if update.schedule_relationship == "CANCELED":
+                status = "Cancelled"
+            for stop_update in update.stop_time_updates:
+                arrival_delay = stop_update.get("arrival_delay")
+                departure_delay = stop_update.get("departure_delay")
+                delay = departure_delay if departure_delay is not None else arrival_delay
+                if delay is not None:
+                    delay_seconds = int(delay)
+                    if delay_seconds > 0 and status == "Scheduled":
+                        status = f"Delayed {round(delay_seconds / 60)} min"
+                    break
+            by_trip[update.trip_id] = {"status": status, "delay_seconds": delay_seconds}
+        return by_trip
+
+    def _apply_trip_update(self, departure: Departure) -> Departure:
+        update = self.trip_updates.get(departure.trip_id)
+        if not update:
+            return departure
+        delay_seconds = int(update.get("delay_seconds", 0))
+        departure_seconds = departure.departure_seconds + delay_seconds
+        current = datetime.now(FEED_TZ)
+        midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+        now_seconds = int((current - midnight).total_seconds())
+        return Departure(
+            route_id=departure.route_id,
+            route_name=departure.route_name,
+            route_symbol=departure.route_symbol,
+            route_color=departure.route_color,
+            route_text_color=departure.route_text_color,
+            destination=departure.destination,
+            trip_id=departure.trip_id,
+            trip_short_name=departure.trip_short_name,
+            direction_id=departure.direction_id,
+            route_icon=departure.route_icon,
+            status=str(update.get("status", departure.status)),
+            departure_seconds=departure_seconds,
+            minutes=max(0, round((departure_seconds - now_seconds) / 60)),
+            peak_offpeak=departure.peak_offpeak,
+        )
+
+
 FEEDS: dict[str, FeedConfig] = {
     "lirr": FeedConfig("lirr", "Long Island Rail Road", GTFS_ROOT / "lirr", "Jamaica", route_symbol_field="route_long_name"),
     "subway": FeedConfig("subway", "NYC Subway", GTFS_ROOT / "subway", "Times Sq-42 St", "route_short_name", use_transfer_clusters=True),
@@ -336,7 +429,7 @@ FEEDS: dict[str, FeedConfig] = {
     ),
     "manhattan_bus": FeedConfig("manhattan_bus", "Manhattan Bus", GTFS_ROOT / "manhattan_bus", "E 34 ST/5 AV", "route_short_name"),
     "metro_north": FeedConfig("metro_north", "Metro-North Railroad", GTFS_ROOT / "metro_north", "Grand Central", "route_short_name"),
-    "njt_rail": FeedConfig("njt_rail", "NJ TRANSIT Rail", GTFS_ROOT / "njt" / "rail_data", "NEW YORK PENN STATION"),
+    "njt_rail": FeedConfig("njt_rail", "NJ TRANSIT Rail", GTFS_ROOT / "njt" / "rail_data", "NEW YORK PENN STATION", zip_path=NJT_RAIL_GTFS_ZIP),
     "njt_bus": FeedConfig("njt_bus", "NJ TRANSIT Bus", GTFS_ROOT / "njt" / "bus_data", "PORT AUTHORITY BUS TERMINAL"),
     "academy_bus": FeedConfig("academy_bus", "Academy Bus", GTFS_ROOT / "njt" / "Academy_bus_data", "C Columbus Drive at Grove St"),
 }
@@ -367,7 +460,7 @@ def feed_options() -> list[dict[str, str]]:
     return [
         {"key": config.key, "label": config.label, "default_station": config.default_station}
         for config in FEEDS.values()
-        if config.path.exists()
+        if config.path.exists() or (config.zip_path and config.zip_path.exists())
     ]
 
 
@@ -375,11 +468,13 @@ def get_schedule(feed_key: str) -> GtfsSchedule:
     config = FEEDS.get(feed_key)
     if not config:
         raise ValueError(f"Unknown feed {feed_key!r}.")
-    if not config.path.exists():
+    if not config.path.exists() and not (config.zip_path and config.zip_path.exists()):
         raise ValueError(f"GTFS feed {feed_key!r} is not available at {config.path}.")
     if feed_key not in SCHEDULES:
-        print(f"Loading {config.label} GTFS from: {config.path}")
-        SCHEDULES[feed_key] = GtfsSchedule(config)
+        source = config.zip_path if config.zip_path and config.zip_path.exists() else config.path
+        print(f"Loading {config.label} GTFS from: {source}")
+        schedule_class = NjtRailSchedule if feed_key == "njt_rail" else GtfsSchedule
+        SCHEDULES[feed_key] = schedule_class(config)
     return SCHEDULES[feed_key]
 
 
@@ -460,7 +555,7 @@ class SolariHandler(BaseHTTPRequestHandler):
                         "destination": item.destination,
                         "departure_time": format_gtfs_time(item.departure_seconds),
                         "minutes": item.minutes,
-                        "status": "Scheduled",
+                        "status": item.status,
                         "trip_id": item.trip_id,
                         "trip_short_name": item.trip_short_name,
                         "direction_id": item.direction_id,
@@ -521,14 +616,47 @@ class SolariHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the GTFS Solari departure board.")
+    subparsers = parser.add_subparsers(dest="command")
+
+    serve_parser = subparsers.add_parser("serve", help="Run the Solari web board.")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8080)
+
+    download_parser = subparsers.add_parser("download-njt", help="Download NJ TRANSIT rail GTFS/GTFS-RT into data/raw.")
+    download_parser.add_argument("--no-archive", action="store_true", help="Skip timestamped copies in data/archive.")
+
+    refresh_parser = subparsers.add_parser("refresh-njt", help="Download NJ TRANSIT rail realtime protobufs only.")
+    refresh_parser.add_argument("--no-archive", action="store_true", help="Skip timestamped copies in data/archive.")
+
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
+
+    if args.command == "download-njt":
+        download_njt(["getGTFS", "getAlerts", "getTripUpdates", "getVehiclePositions"], archive=not args.no_archive)
+        return
+    if args.command == "refresh-njt":
+        download_njt(["getAlerts", "getTripUpdates", "getVehiclePositions"], archive=not args.no_archive)
+        return
 
     server = ThreadingHTTPServer((args.host, args.port), SolariHandler)
     print(f"GTFS Solari board: http://{args.host}:{args.port}")
     print("Available feeds: " + ", ".join(option["key"] for option in feed_options()))
     server.serve_forever()
+
+
+def download_njt(endpoints: list[str], archive: bool = True) -> None:
+    try:
+        from app.api import NjtApiClient
+        from app.utils import load_settings
+    except ImportError as error:
+        raise SystemExit(f"Missing NJT module dependency: {error}") from error
+
+    settings = load_settings()
+    client = NjtApiClient(settings)
+    for endpoint in endpoints:
+        path = client.download(endpoint, archive=archive)
+        print(f"{endpoint}: {path}")
 
 
 if __name__ == "__main__":
