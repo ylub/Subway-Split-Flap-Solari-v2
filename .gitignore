@@ -8,4 +8,7 @@ gtfs/
 !gtfs/
 gtfs/*
 !gtfs/README.md
+
+# NJ TRANSIT GTFS data and icon resources require NJT approval to publish.
+gtfs/njt/
 zip/
