@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import errno
 import io
 import json
 import math
@@ -639,10 +640,26 @@ def main() -> None:
         download_njt(["getAlerts", "getTripUpdates", "getVehiclePositions"], archive=not args.no_archive)
         return
 
-    server = ThreadingHTTPServer((args.host, args.port), SolariHandler)
-    print(f"GTFS Solari board: http://{args.host}:{args.port}")
+    try:
+        server, selected_port = create_server(args.host, args.port)
+    except OSError as error:
+        raise SystemExit(f"Could not start Solari on {args.host}:{args.port}: {error}") from error
+
+    if selected_port != args.port:
+        print(f"Port {args.port} is busy; using {selected_port} instead.")
+    print(f"GTFS Solari board: http://{args.host}:{selected_port}")
     print("Available feeds: " + ", ".join(option["key"] for option in feed_options()))
     server.serve_forever()
+
+
+def create_server(host: str, port: int) -> tuple[ThreadingHTTPServer, int]:
+    for selected_port in range(port, port + 10):
+        try:
+            return ThreadingHTTPServer((host, selected_port), SolariHandler), selected_port
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+    raise OSError(f"ports {port}-{port + 9} are already in use")
 
 
 def download_njt(endpoints: list[str], archive: bool = True) -> None:
